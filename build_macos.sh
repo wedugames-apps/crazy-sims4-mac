@@ -39,6 +39,12 @@ if [ ! -d "$APP_PATH" ]; then
 fi
 echo "✓ macOS .app Bundle created successfully: $APP_PATH"
 
+# 2.5 Ad-Hoc Sign Application for Gatekeeper Compliance BEFORE packaging into DMG
+if command -v codesign >/dev/null 2>&1; then
+    echo "🔏 Applying ad-hoc codesign to .app bundle..."
+    codesign --force --deep --sign - "$APP_PATH" || true
+fi
+
 # 3. Create DMG staging folder
 echo -e "\n💿 [3/4] Packaging DMG Installer..."
 DMG_STAGE="dist/dmg_stage"
@@ -62,6 +68,19 @@ if command -v hdiutil >/dev/null 2>&1; then
         -format UDZO \
         "$DMG_OUTPUT"
     echo "✓ DMG created: $DMG_OUTPUT ($(du -sh "$DMG_OUTPUT" | cut -f1))"
+
+    # Also sign the DMG container if codesign is available
+    if command -v codesign >/dev/null 2>&1; then
+        codesign --force --sign - "$DMG_OUTPUT" || true
+    fi
+
+    # Generate arch-tagged companion DMG for clear download identification
+    HOST_ARCH="$(uname -m)"
+    if [ "$HOST_ARCH" = "arm64" ]; then
+        cp -f "$DMG_OUTPUT" "dist/Crazy-Doctor-The-Sims-4-macOS-AppleSilicon-M1-M4.dmg" 2>/dev/null || true
+    elif [ "$HOST_ARCH" = "x86_64" ]; then
+        cp -f "$DMG_OUTPUT" "dist/Crazy-Doctor-The-Sims-4-macOS-Intel-x86_64.dmg" 2>/dev/null || true
+    fi
 else
     echo "⚠️ Warning: hdiutil not found (running in non-macOS environment)."
     echo "Packaging tar.gz archive as fallback..."

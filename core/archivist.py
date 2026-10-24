@@ -34,6 +34,11 @@ class SaveSlotInfo:
         self.corruption_reason: Optional[str] = None
 
     @property
+    def slot_number(self) -> str:
+        """Returns slot hex identifier (e.g. '00000002')."""
+        return self.slot_hex
+
+    @property
     def last_played_str(self) -> str:
         if self.main_mtime > 0:
             return datetime.fromtimestamp(self.main_mtime).strftime("%Y-%m-%d %H:%M:%S")
@@ -188,12 +193,19 @@ class SaveArchivist:
 
         target_backup_path = backup_ver_info["path"]
         main_save_path = os.path.join(self.saves_folder, f"Slot_{slot_hex}.save")
+        temp_target = main_save_path + f".tmp_{os.getpid()}"
 
         try:
-            shutil.copy2(target_backup_path, main_save_path)
+            shutil.copy2(target_backup_path, temp_target)
+            os.replace(temp_target, main_save_path)
             self.scan_slots()
             return True, f"Slot {slot_hex} successfully rolled back to .ver{target_ver}."
         except Exception as e:
+            if os.path.exists(temp_target):
+                try:
+                    os.remove(temp_target)
+                except Exception:
+                    pass
             return False, f"Failed to perform rollback: {e}"
 
     def list_snapshots(self) -> List[Dict[str, any]]:

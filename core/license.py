@@ -282,15 +282,28 @@ class MacLicenseManager:
 
         current_hwid = cls.get_macos_hwid()
 
-        # Verify HWID or offline signature
-        devices = [d.upper() for d in cache.get("devices", []) if d]
-        cached_hwid = str(cache.get("hwid", "")).upper()
-        cur_u = current_hwid.upper()
+        # Verify HWID and offline cryptographic signature
+        devices = [str(d).strip().upper() for d in cache.get("devices", []) if d]
+        cached_hwid = str(cache.get("hwid", "")).strip().upper()
+        cur_u = current_hwid.strip().upper()
 
-        hwid_match = (cur_u in devices) or (cur_u == cached_hwid) or (not devices and not cached_hwid)
-        sig_valid = cls.verify_offline_signature(cache, current_hwid)
+        hwid_match = (cur_u in devices) or (cur_u == cached_hwid)
+        has_signature = bool(cache.get("offline_signature"))
 
-        if hwid_match or sig_valid:
+        if has_signature:
+            sig_valid = cls.verify_offline_signature(cache, current_hwid)
+            if not sig_valid:
+                return False, "🔒 Tanda tangan lisensi lokal tidak valid atau telah dimodifikasi.", cache
+            is_valid = True
+        else:
+            if not hwid_match:
+                return False, "🔒 Lisensi terikat pada Mac lain. Hubungkan internet untuk aktivasi perangkat ini.", cache
+            is_valid = True
+            # Upgrade legacy cache with offline HMAC-SHA256 signature
+            cache["offline_signature"] = cls.generate_offline_signature(key, current_hwid, expire_at)
+            cls.save_cached_license(cache)
+
+        if is_valid:
             # Sync cache to primary location if loaded from secondary
             primary_p = cls.get_primary_cache_path()
             if not os.path.isfile(primary_p):

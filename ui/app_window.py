@@ -339,13 +339,7 @@ class AppWindow(ctk.CTk, DND_BASE):
         initial = self.health_suite.ts4_user_folder or os.path.expanduser("~/Documents/Electronic Arts")
         path = filedialog.askdirectory(title=t("folder_dialog_title"), initialdir=initial)
         if path and os.path.isdir(path):
-            self.health_suite.ts4_user_folder = os.path.abspath(path)
-            self.health_suite.mods_folder = os.path.join(self.health_suite.ts4_user_folder, "Mods")
-            self.health_suite.saves_folder = os.path.join(self.health_suite.ts4_user_folder, "saves")
-            self.health_suite.quarantine_folder = os.path.join(self.health_suite.ts4_user_folder, "Quarantine_WeduGames")
-
-            # Re-initialize tab diagnostics
-            self.health_suite.graphics_diag = GraphicsDiagnostic(self.health_suite.ts4_user_folder)
+            self.health_suite.set_ts4_folder(path)
             self.tab_frames["graphics"].graphics_diag = self.health_suite.graphics_diag
             self.tab_frames["graphics"].refresh_all()
 

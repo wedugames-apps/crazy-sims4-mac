@@ -192,12 +192,48 @@ class TestCoreEnginesMac(unittest.TestCase):
         with open(le_p, "w", encoding="utf-8") as f:
             f.write("Simulation error: AttributeError: 'NoneType' object has no attribute 'x'\n")
 
+        # D) Corrupted save slot (0-byte) with valid .ver0 backup
+        corrupt_save = os.path.join(self.saves_folder, "Slot_00000002.save")
+        with open(corrupt_save, "wb") as f:
+            pass  # 0 bytes (corrupt)
+        save_backup = os.path.join(self.saves_folder, "Slot_00000002.save.ver0")
+        with open(save_backup, "wb") as f:
+            f.write(b"HEALTHY_SAVE_GAME_DATA_PAYLOAD_V0")
+
+        # E) Script mod nested 2 subfolders deep
+        deep_dir = os.path.join(self.mods_folder, "GameplayPack", "Subfolder")
+        os.makedirs(deep_dir, exist_ok=True)
+        deep_script = os.path.join(deep_dir, "deep_mod.ts4script")
+        with open(deep_script, "wb") as f:
+            f.write(b"SCRIPT_ZIP_PAYLOAD")
+
+        # F) Lag-bomb 3D CC package (>30,000 polygons)
+        lag_pkg = DBPFPackage()
+        geom_lag = bytearray(b"GEOM")
+        # 40000 vertices, 120000 indices -> 40000 triangles (>30k polys)
+        geom_lag.extend(struct.pack("<IIIIII", 4, 0, 0x1234, 0, 40000, 120000))
+        geom_lag.extend(b"\x00" * 64)
+        lag_pkg.add_resource(DBPFResource(
+            res_type=TYPE_GEOM,
+            res_group=0x00000000,
+            instance_id=0x123456789ABCDEF0,
+            data=bytes(geom_lag)
+        ))
+        lag_pkg_path = os.path.join(self.mods_folder, "LagBombCC.package")
+        lag_pkg.save(lag_pkg_path)
+
         suite = MasterHealthSuite(self.ts4_folder)
         report = suite.run_health_check()
 
         self.assertIsInstance(report["health_score"], int)
-        self.assertLess(report["health_score"], 100)
+        self.assertLess(report["health_score"], 80)
         self.assertGreater(len(report["issues"]), 0)
+
+        # Confirm lag bomb was detected by health suite
+        issue_titles = [i.title for i in report["issues"]]
+        self.assertTrue(any("Lag Bomb" in t for t in issue_titles))
+        self.assertTrue(any("Nested Too Deeply" in t for t in issue_titles))
+        self.assertTrue(any("Corrupted Save Slots" in t for t in issue_titles))
 
         # Run Auto-Fix All
         fix_results = suite.run_auto_fix_all()
@@ -206,6 +242,16 @@ class TestCoreEnginesMac(unittest.TestCase):
         # Check quarantine directory was created
         quarantine_dir = os.path.join(self.ts4_folder, "Quarantine_WeduGames")
         self.assertTrue(os.path.isdir(quarantine_dir))
+
+        # Check save was rolled back atomically from .ver0
+        self.assertTrue(os.path.isfile(corrupt_save))
+        self.assertGreater(os.path.getsize(corrupt_save), 0)
+        with open(corrupt_save, "rb") as f:
+            self.assertEqual(f.read(), b"HEALTHY_SAVE_GAME_DATA_PAYLOAD_V0")
+
+        # Check deep script was flattened to depth 1
+        flattened_script = os.path.join(self.mods_folder, "GameplayPack", "deep_mod.ts4script")
+        self.assertTrue(os.path.isfile(flattened_script))
 
 
 if __name__ == "__main__":

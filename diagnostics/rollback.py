@@ -64,6 +64,15 @@ class SaveRecoveryDiagnostic:
         success, msg = self.archivist.rollback_slot_to_version(slot_hex, target_ver=target_ver)
         return success, msg
 
+    def rollback_slot(self, slot_id: any, target_ver: int = 0) -> Tuple[bool, str]:
+        """
+        Rollback slot alias supporting hex strings, numbers, or slot names.
+        """
+        slot_str = str(slot_id).upper().replace("SLOT_", "").replace(".SAVE", "").strip()
+        if target_ver == 0:
+            return self.auto_recover_slot(slot_str)
+        return self.archivist.rollback_slot_to_version(slot_str, target_ver=target_ver)
+
     def auto_recover_all_corrupted(self) -> Tuple[int, List[str]]:
         """
         Finds all corrupted save slots and automatically attempts recovery from .ver0.

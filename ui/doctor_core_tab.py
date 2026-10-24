@@ -497,8 +497,8 @@ class DoctorCoreTab(ctk.CTkFrame, DND_BASE):
                 c, b = self.health_suite.graphics_diag.purge_cache()
                 msg = f"Purged {c} items ({b//1024} KB freed) from localthumbcache and Metal shader cache."
             elif action_id == "flatten_scripts":
-                res = self.health_suite.script_flattener.flatten_all_violations()
-                msg = f"Flattened {res['flattened_count']} script mod(s) to Depth 1."
+                c, s_logs = self.health_suite.script_flattener.flatten_all_violations()
+                msg = f"Flattened {c} script mod(s) to Depth 1."
             elif action_id == "hydrate_icloud":
                 h, f = self.health_suite.cloud_mgr.hydrate_all_ghosts()
                 msg = f"Hydrated {h} iCloud ghost files locally. Failed: {f}."
@@ -516,6 +516,3 @@ class DoctorCoreTab(ctk.CTkFrame, DND_BASE):
             self.action_card_frame.pack_forget()
         except Exception as e:
             self._append_message("doctor", t("doc_action_executed_failed", label=label, msg=str(e)))
-
-
-AITab = DoctorCoreTab

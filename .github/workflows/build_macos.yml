@@ -6,10 +6,18 @@ on:
     paths:
       - 'Crazy The Sims 4 Mac/**'
       - '.github/workflows/build_macos.yml'
+      - '**.py'
+      - '**.sh'
+      - '**.spec'
+      - 'requirements.txt'
+      - 'assets/**'
   pull_request:
     branches: [ main, master ]
     paths:
       - 'Crazy The Sims 4 Mac/**'
+      - '**.py'
+      - '**.sh'
+      - '**.spec'
   workflow_dispatch:
 
 permissions:

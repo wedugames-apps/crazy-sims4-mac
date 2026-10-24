@@ -70,6 +70,7 @@ class TestCIWorkflowAndIntegrity(unittest.TestCase):
             re.compile(r'\bAI\b'),            # Standalone word AI
             re.compile(r'\bAI_', re.I),       # AI_ prefix
             re.compile(r'_AI\b', re.I),       # _AI suffix
+            re.compile(r'\bAI[A-Z]'),         # CamelCase AI identifier like AITab or AIAgent
             re.compile(r'ai_config', re.I),   # legacy config file name
             re.compile(r'Gemini', re.I),      # Google Gemini brand
             re.compile(r'Artificial Intelligence', re.I),

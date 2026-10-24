@@ -114,6 +114,30 @@ class TestMacLicense(unittest.TestCase):
             self.assertIn("offline_signature", loaded)
             self.assertIn("hwid", loaded)
 
+    def test_auto_unlock_rejects_tampered_cache(self):
+        """Verifies that tampering with key or HWID in cache causes check_auto_unlock to fail."""
+        os.makedirs(os.path.dirname(self.eashare_cache), exist_ok=True)
+        hwid = MacLicenseManager.get_macos_hwid()
+        orig_key = "WG-TS4M-LEGIT-1111"
+        sig = MacLicenseManager.generate_offline_signature(orig_key, hwid)
+
+        # Attacker tampers key in cache but keeps same HWID in devices
+        tampered_data = {
+            "key": "WG-TS4M-HACK-9999",
+            "license_key": "WG-TS4M-HACK-9999",
+            "status": "ACTIVE",
+            "hwid": hwid,
+            "devices": [hwid],
+            "offline_signature": sig,  # Signature was for orig_key!
+        }
+        with open(self.eashare_cache, "w") as f:
+            json.dump(tampered_data, f)
+
+        with patch.object(MacLicenseManager, "get_cache_paths", return_value=[self.eashare_cache, self.wedugames_cache]):
+            unlocked, msg, cache = MacLicenseManager.check_auto_unlock()
+            self.assertFalse(unlocked, "Tampered cache should not be auto-unlocked")
+            self.assertIn("tidak valid", msg)
+
 
 if __name__ == "__main__":
     unittest.main()

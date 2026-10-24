@@ -28,6 +28,21 @@ class MeshHunterReport:
         self.missing_mesh_instances: List[int] = []
         self.meshes: List[GeomMeshInfo] = []
 
+    def __getitem__(self, item: str):
+        if item in ("file", "package_path", "path"):
+            return self.package_path
+        if item in ("filename", "name"):
+            return self.filename
+        if hasattr(self, item):
+            return getattr(self, item)
+        raise KeyError(item)
+
+    def get(self, item: str, default=None):
+        try:
+            return self[item]
+        except KeyError:
+            return default
+
 
 class MeshHunter:
     """Profiles CC meshes and hunts broken 3D dependencies."""
@@ -115,9 +130,13 @@ class MeshHunter:
         return {
             "scanned_count": len(self.all_reports),
             "lag_bomb_count": len(self.lag_bombs),
+            "lag_bombs_count": len(self.lag_bombs),
             "broken_lod_count": len(self.broken_lod_packages),
             "orphan_recolor_count": len(self.orphan_recolors),
             "lag_bombs": self.lag_bombs,
             "broken_lods": self.broken_lod_packages,
             "orphan_recolors": self.orphan_recolors
         }
+
+    # Alias for API consistency across test and health suites
+    scan_all_packages = scan_mods

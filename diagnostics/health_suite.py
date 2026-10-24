@@ -95,6 +95,24 @@ class MasterHealthSuite:
         self.health_status: str = "Healthy Green"
         self.last_scan_time: Optional[str] = None
 
+    def set_ts4_folder(self, folder: str):
+        """Updates user folder path and re-initializes all sub-engines."""
+        self.ts4_user_folder = os.path.abspath(folder) if folder else ""
+        self.mods_folder = os.path.join(self.ts4_user_folder, "Mods") if self.ts4_user_folder else ""
+        self.saves_folder = os.path.join(self.ts4_user_folder, "saves") if self.ts4_user_folder else ""
+        self.quarantine_folder = (
+            os.path.join(self.ts4_user_folder, "Quarantine_WeduGames")
+            if self.ts4_user_folder
+            else ""
+        )
+        self.graphics_diag = GraphicsDiagnostic(self.ts4_user_folder) if self.ts4_user_folder else None
+        self.cloud_mgr = CloudFolderManager(self.ts4_user_folder) if self.ts4_user_folder else None
+        self.mesh_hunter = MeshHunter(self.mods_folder) if self.mods_folder else None
+        self.script_flattener = ScriptModFlattener(self.mods_folder) if self.mods_folder else None
+        self.crash_decoder = CrashDecoder(self.ts4_user_folder) if self.ts4_user_folder else None
+        self.save_recovery = SaveRecoveryDiagnostic(self.saves_folder) if self.saves_folder else None
+        self.townie_sanitizer = TownieSanitizer(self.mods_folder) if self.mods_folder else None
+
     def run_full_scan(self, deep_mesh_scan: bool = True) -> Dict[str, any]:
         """Runs an end-to-end multi-point health scan for macOS."""
         self.issues.clear()
@@ -304,10 +322,10 @@ class MasterHealthSuite:
 
             if self.mesh_hunter:
                 try:
-                    mesh_report = self.mesh_hunter.scan_all_packages()
-                    lag_count = mesh_report.get("lag_bombs_count", 0)
+                    mesh_report = self.mesh_hunter.scan_mods(max_packages=300)
+                    lag_count = mesh_report.get("lag_bomb_count", 0)
                     if lag_count > 0:
-                        aff_meshes = [b["file"] for b in mesh_report.get("lag_bombs", [])]
+                        aff_meshes = [b.package_path for b in mesh_report.get("lag_bombs", [])]
                         self.issues.append(HealthIssue(
                             category="Performance",
                             title=f"{lag_count} Extreme High-Poly 3D CC Lag Bombs (>30,000 Polygons)",
@@ -317,6 +335,19 @@ class MasterHealthSuite:
                             auto_fixable=False
                         ))
                         self.health_score -= min(15, lag_count * 2)
+
+                    orphan_count = mesh_report.get("orphan_recolor_count", 0)
+                    if orphan_count > 0:
+                        aff_orphans = [m.package_path for m in mesh_report.get("orphan_recolors", [])]
+                        self.issues.append(HealthIssue(
+                            category="Meshes",
+                            title=f"{orphan_count} Recolor CC with Missing Base Meshes",
+                            description="Recolors without required 3D mesh will appear bald, naked, or with red question marks.",
+                            severity="WARNING",
+                            affected_files=aff_orphans,
+                            auto_fixable=False
+                        ))
+                        self.health_score -= min(15, orphan_count * 3)
                 except Exception:
                     pass
 
@@ -401,13 +432,22 @@ class MasterHealthSuite:
         # 2. Flatten Script Mods
         if self.script_flattener:
             try:
-                flat_res = self.script_flattener.flatten_all_violations()
-                if flat_res["flattened_count"] > 0:
-                    actions_taken.append(f"Flattened {flat_res['flattened_count']} deep script mods to Depth 1")
+                moved_count, s_logs = self.script_flattener.flatten_all_violations()
+                if moved_count > 0:
+                    actions_taken.append(f"Flattened {moved_count} deep script mods to Depth 1")
             except Exception as e:
                 actions_taken.append(f"Script flattener failed: {e}")
 
-        # 3. Quarantine 0-Byte and Corrupt Packages
+        # 3. Hydrate iCloud Ghost Files (Run before quarantine so unhydrated placeholders are hydrated)
+        if self.cloud_mgr:
+            try:
+                hydrated, failed = self.cloud_mgr.hydrate_all_ghosts()
+                if hydrated > 0:
+                    actions_taken.append(f"Hydrated {hydrated} iCloud ghost files locally")
+            except Exception as e:
+                actions_taken.append(f"Cloud hydration failed: {e}")
+
+        # 4. Quarantine 0-Byte and Corrupt Packages (Executed AFTER cloud hydration attempt)
         if self.mods_folder and os.path.isdir(self.mods_folder):
             quarantined_pkgs = 0
             for root, _, files in os.walk(self.mods_folder):
@@ -433,15 +473,6 @@ class MasterHealthSuite:
             if quarantined_pkgs > 0:
                 actions_taken.append(f"Quarantined {quarantined_pkgs} corrupt/0-byte packages")
 
-        # 4. Hydrate iCloud Ghost Files
-        if self.cloud_mgr:
-            try:
-                hydrated, failed = self.cloud_mgr.hydrate_all_ghosts()
-                if hydrated > 0:
-                    actions_taken.append(f"Hydrated {hydrated} iCloud ghost files locally")
-            except Exception as e:
-                actions_taken.append(f"Cloud hydration failed: {e}")
-
         # 5. Purge Metal Shader Cache & Localthumbcache
         if self.graphics_diag:
             try:
@@ -455,14 +486,10 @@ class MasterHealthSuite:
         # 6. Recover Corrupted Save Slots from .ver0
         if self.save_recovery:
             try:
-                diag = self.save_recovery.diagnose_all_slots()
-                recovered_count = 0
-                for cs in diag["corrupted_slots"]:
-                    ok, msg = self.save_recovery.rollback_slot(cs.slot_number)
-                    if ok:
-                        recovered_count += 1
-                if recovered_count > 0:
-                    actions_taken.append(f"Restored {recovered_count} corrupted save slot(s) from .ver0 backups")
+                rec_count, r_logs = self.save_recovery.auto_recover_all_corrupted()
+                if rec_count > 0:
+                    actions_taken.append(f"Restored {rec_count} corrupted save slot(s) from .ver0 backups")
+                    actions_taken.extend(r_logs)
             except Exception as e:
                 actions_taken.append(f"Save recovery failed: {e}")
 

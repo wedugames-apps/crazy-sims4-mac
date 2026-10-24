@@ -44,6 +44,34 @@ KNOWN_CULPRIT_PATTERNS = [
 ]
 
 
+class FlattenResult(tuple):
+    """Dual compatibility result supporting both tuple unpacking (count, logs) and dict indexing."""
+    def __new__(cls, moved: int, logs: List[str]):
+        return super().__new__(cls, (moved, logs))
+
+    @property
+    def flattened_count(self) -> int:
+        return self[0]
+
+    @property
+    def logs(self) -> List[str]:
+        return self[1]
+
+    def __getitem__(self, item):
+        if item in ("flattened_count", "moved", "count"):
+            return self[0]
+        if item in ("logs", "log_messages"):
+            return self[1]
+        return super().__getitem__(item)
+
+    def get(self, key, default=None):
+        if key in ("flattened_count", "moved", "count"):
+            return self[0]
+        if key in ("logs", "log_messages"):
+            return self[1]
+        return default
+
+
 class ScriptModFlattener:
     """Detects and resolves .ts4script nesting depth violations."""
 
@@ -110,7 +138,7 @@ class ScriptModFlattener:
             except Exception as e:
                 logs.append(f"Failed to move {v['filename']}: {e}")
 
-        return moved, logs
+        return FlattenResult(moved, logs)
 
 
 class CrashDecoder:
