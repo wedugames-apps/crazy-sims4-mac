@@ -16,18 +16,30 @@ import unittest
 from pathlib import Path
 
 PROJECT_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-WORKSPACE_DIR = os.path.dirname(PROJECT_DIR)
+
+
+def _detect_workspace_dir() -> str:
+    this_file = Path(__file__).resolve()
+    project_dir = this_file.parent.parent
+    if len(this_file.parents) > 2:
+        parent_dir = this_file.parents[2]
+        if (parent_dir / ".github").exists() or (parent_dir / "Crazy The Sims 4 Mac").exists():
+            return str(parent_dir)
+    return str(project_dir)
+
+
+WORKSPACE_DIR = _detect_workspace_dir()
 
 
 def resolve_candidate_path(*parts: str) -> Path:
     """
-    Resolves a file path robustly across local workspaces and CI checkout layouts.
+    Resolves a file or directory path robustly across local workspaces and CI checkout layouts.
     Candidate resolution order:
     1. Project root (parent of 'tests/' folder)
     2. Current working directory
-    3. CWD / 'Crazy The Sims 4 Mac'
-    4. Workspace root (parent of project root)
-    5. Workspace root / 'Crazy The Sims 4 Mac'
+    3. CWD / 'Crazy The Sims 4 Mac' or CWD / 'crazy-sims4-mac'
+    4. Workspace root (parent of project root, parents[2])
+    5. Workspace root / 'Crazy The Sims 4 Mac' or Workspace root / 'crazy-sims4-mac'
     """
     rel_path = Path(*parts)
     this_file = Path(__file__).resolve()
@@ -39,12 +51,14 @@ def resolve_candidate_path(*parts: str) -> Path:
         project_dir / rel_path,
         cwd / rel_path,
         cwd / "Crazy The Sims 4 Mac" / rel_path,
+        cwd / "crazy-sims4-mac" / rel_path,
         workspace_dir / rel_path,
         workspace_dir / "Crazy The Sims 4 Mac" / rel_path,
+        workspace_dir / "crazy-sims4-mac" / rel_path,
     ]
 
     for cand in candidates:
-        if cand.is_file():
+        if cand.exists():
             return cand
 
     # Default fallback to primary project path

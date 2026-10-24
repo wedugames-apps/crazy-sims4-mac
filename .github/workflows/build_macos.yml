@@ -15,9 +15,12 @@ on:
     branches: [ main, master ]
     paths:
       - 'Crazy The Sims 4 Mac/**'
+      - '.github/workflows/build_macos.yml'
       - '**.py'
       - '**.sh'
       - '**.spec'
+      - 'requirements.txt'
+      - 'assets/**'
   workflow_dispatch:
 
 permissions:
