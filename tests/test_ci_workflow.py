@@ -13,15 +13,48 @@ Verifies:
 import os
 import re
 import unittest
+from pathlib import Path
 
 PROJECT_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 WORKSPACE_DIR = os.path.dirname(PROJECT_DIR)
 
 
+def resolve_candidate_path(*parts: str) -> Path:
+    """
+    Resolves a file path robustly across local workspaces and CI checkout layouts.
+    Candidate resolution order:
+    1. Project root (parent of 'tests/' folder)
+    2. Current working directory
+    3. CWD / 'Crazy The Sims 4 Mac'
+    4. Workspace root (parent of project root)
+    5. Workspace root / 'Crazy The Sims 4 Mac'
+    """
+    rel_path = Path(*parts)
+    this_file = Path(__file__).resolve()
+    project_dir = this_file.parent.parent
+    workspace_dir = this_file.parents[2] if len(this_file.parents) > 2 else project_dir
+    cwd = Path.cwd().resolve()
+
+    candidates = [
+        project_dir / rel_path,
+        cwd / rel_path,
+        cwd / "Crazy The Sims 4 Mac" / rel_path,
+        workspace_dir / rel_path,
+        workspace_dir / "Crazy The Sims 4 Mac" / rel_path,
+    ]
+
+    for cand in candidates:
+        if cand.is_file():
+            return cand
+
+    # Default fallback to primary project path
+    return project_dir / rel_path
+
+
 class TestCIWorkflowAndIntegrity(unittest.TestCase):
     def test_github_workflow_file_exists(self):
-        wf_path = os.path.join(WORKSPACE_DIR, ".github", "workflows", "build_macos.yml")
-        self.assertTrue(os.path.isfile(wf_path), f"Workflow file missing at {wf_path}")
+        wf_path = resolve_candidate_path(".github", "workflows", "build_macos.yml")
+        self.assertTrue(wf_path.is_file(), f"Workflow file missing at {wf_path}")
 
         with open(wf_path, "r", encoding="utf-8") as f:
             content = f.read()
@@ -38,8 +71,8 @@ class TestCIWorkflowAndIntegrity(unittest.TestCase):
         self.assertIn("workflow_dispatch", content)
 
     def test_build_macos_shell_script(self):
-        sh_path = os.path.join(PROJECT_DIR, "build_macos.sh")
-        self.assertTrue(os.path.isfile(sh_path), f"Build script missing at {sh_path}")
+        sh_path = resolve_candidate_path("build_macos.sh")
+        self.assertTrue(sh_path.is_file(), f"Build script missing at {sh_path}")
 
         with open(sh_path, "r", encoding="utf-8") as f:
             content = f.read()
@@ -50,8 +83,8 @@ class TestCIWorkflowAndIntegrity(unittest.TestCase):
         self.assertIn("Crazy-Doctor-The-Sims-4-macOS.dmg", content)
 
     def test_pyinstaller_mac_spec(self):
-        spec_path = os.path.join(PROJECT_DIR, "crazy_sims4_doctor_mac.spec")
-        self.assertTrue(os.path.isfile(spec_path), f"Spec file missing at {spec_path}")
+        spec_path = resolve_candidate_path("crazy_sims4_doctor_mac.spec")
+        self.assertTrue(spec_path.is_file(), f"Spec file missing at {spec_path}")
 
         with open(spec_path, "r", encoding="utf-8") as f:
             content = f.read()
