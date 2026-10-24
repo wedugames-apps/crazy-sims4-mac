@@ -1,0 +1,87 @@
+name: Build Crazy Doctor for The Sims 4 (macOS Native)
+
+on:
+  push:
+    branches: [ main, master, macos ]
+    paths:
+      - 'Crazy The Sims 4 Mac/**'
+      - '.github/workflows/build_macos.yml'
+  pull_request:
+    branches: [ main, master ]
+    paths:
+      - 'Crazy The Sims 4 Mac/**'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build-macos:
+    name: Build macOS (${{ matrix.name }} - ${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: macos-14
+            arch: arm64
+            name: AppleSilicon-M1-M4
+          - os: macos-13
+            arch: x86_64
+            name: Intel-x86_64
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install Build & Application Dependencies
+        run: |
+          python3 -m pip install --upgrade pip setuptools wheel
+          if [ -f "requirements.txt" ]; then
+            python3 -m pip install -r requirements.txt
+          else
+            python3 -m pip install -r "Crazy The Sims 4 Mac/requirements.txt"
+          fi
+          python3 -m pip install pytest pyinstaller
+
+      - name: Run Automated Verification Tests
+        run: |
+          if [ -d "tests" ]; then
+            pytest tests -v
+          else
+            pytest "Crazy The Sims 4 Mac/tests" -v
+          fi
+
+      - name: Compile macOS .app Bundle & DMG Installer
+        run: |
+          if [ -f "build_macos.sh" ]; then
+            chmod +x build_macos.sh
+            ./build_macos.sh
+          else
+            cd "Crazy The Sims 4 Mac"
+            chmod +x build_macos.sh
+            ./build_macos.sh
+          fi
+
+      - name: Ad-Hoc Sign Application for Gatekeeper Compliance
+        run: |
+          if [ -d "dist/Crazy Doctor for The Sims 4.app" ]; then
+            codesign --force --deep --sign - "dist/Crazy Doctor for The Sims 4.app" || true
+          elif [ -d "Crazy The Sims 4 Mac/dist/Crazy Doctor for The Sims 4.app" ]; then
+            codesign --force --deep --sign - "Crazy The Sims 4 Mac/dist/Crazy Doctor for The Sims 4.app" || true
+          fi
+
+      - name: Upload Distributable DMG Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: Crazy-Doctor-The-Sims-4-macOS-${{ matrix.name }}
+          path: |
+            dist/*.dmg
+            Crazy The Sims 4 Mac/dist/*.dmg
+          retention-days: 90
+          if-no-files-found: error
