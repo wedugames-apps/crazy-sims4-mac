@@ -75,7 +75,7 @@ class TestCIWorkflowAndIntegrity(unittest.TestCase):
 
         # Check required runner platforms
         self.assertIn("macos-14", content, "Missing macOS 14 (Apple Silicon) runner")
-        self.assertIn("macos-13", content, "Missing macOS 13 (Intel) runner")
+        self.assertTrue("macos-15-intel" in content or "macos-13" in content, "Missing macOS Intel runner label")
 
         # Check essential build and packaging steps
         self.assertIn("setup-python", content)

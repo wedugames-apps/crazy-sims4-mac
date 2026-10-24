@@ -37,7 +37,7 @@ jobs:
           - os: macos-14
             arch: arm64
             name: AppleSilicon-M1-M4
-          - os: macos-13
+          - os: macos-15-intel
             arch: x86_64
             name: Intel-x86_64
 
